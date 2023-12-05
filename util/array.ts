@@ -1,3 +1,11 @@
+const chunk = <T>(array: ReadonlyArray<T>, chunks: number): ReadonlyArray<T> => {
+  return array.reduce(function (p, cur, i) {
+    ;(p[(i / chunks) | 0] = p[(i / chunks) | 0] || []).push(cur)
+
+    return p
+  }, [])
+}
+
 const intersection = <T>(array1: ReadonlyArray<T>, array2: ReadonlyArray<T>): ReadonlyArray<T> => {
   return array1.filter(value => {
     return array2.includes(value)
@@ -16,4 +24,4 @@ const windows = <T>(array: Array<T>, windowLength: number): Array<Array<T>> => {
     .filter(window => window.length > 0)
 }
 
-export { intersection, windows }
+export { chunk, intersection, windows }

@@ -3,28 +3,33 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { solutionExample, solutionPart1, solutionPart2 } from '../util/index.ts'
 import { Almanac, AlmanacMap, AlmanacMapRange, Category } from './almanac.ts'
-import { range } from 'ramda'
+import { Range } from '../util/range.ts'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 
-const readAlmanac = ({ file, seedsAsRange }: { file: string; seedsAsRange: boolean }): Almanac => {
+const readAlmanac = <T extends boolean, TData extends number | Range = T extends true ? Range : number>({
+  file,
+  seedsAsRange,
+}: {
+  file: string
+  seedsAsRange: T
+}): Almanac<TData> => {
   const [rawSeedsLine, ...rawMaps] = readFileSync(resolve(__dirname, file), 'utf-8').trim().split('\n\n')
 
   const rawSeeds = rawSeedsLine.split(': ')[1]
-  let seeds: Array<number>
+  let seeds: ReadonlyArray<TData>
 
   if (seedsAsRange) {
     const parsedSeeds = [...rawSeeds.matchAll(/(\d+) (\d+)/g)].flatMap(seedRange => {
       const start = Number(seedRange[1])
       const length = Number(seedRange[2])
 
-      // Ramda, because exclusive
-      return range(start, start + length)
+      return new Range(start, start + length - 1)
     })
 
-    seeds = [...new Set(parsedSeeds)]
+    seeds = parsedSeeds as unknown as ReadonlyArray<TData>
   } else {
-    seeds = rawSeeds.split(' ').map(seed => Number(seed))
+    seeds = rawSeeds.split(' ').map(seed => Number(seed)) as unknown as ReadonlyArray<TData>
   }
 
   const maps = rawMaps.map(rawMap => {
@@ -48,19 +53,24 @@ const readAlmanac = ({ file, seedsAsRange }: { file: string; seedsAsRange: boole
 
 const part1 = (file: string) => {
   const almanac = readAlmanac({ file, seedsAsRange: false })
-  const locations = almanac.processMapping()
+  const locations = almanac.processMapping(almanac.seeds)
 
   return Math.min(...locations)
 }
 
 const part2 = (file: string) => {
   const almanac = readAlmanac({ file, seedsAsRange: true })
+  const seedsToCheck = almanac.continuityBreakpoints().filter(breakpoint => {
+    return almanac.seeds.some(range => range.contains(breakpoint))
+  })
 
-  return Math.min(...[0])
+  const locations = almanac.processMapping(seedsToCheck)
+
+  return Math.min(...locations)
 }
 
 solutionExample(part1('example.txt'))
 solutionPart1(part1('input.txt'))
 
-// solutionExample(part2('example.txt'))
-// solutionPart2(part2('input.txt'))
+solutionExample(part2('example.txt'))
+solutionPart2(part2('input.txt'))
