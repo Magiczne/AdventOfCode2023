@@ -27,6 +27,8 @@ interface Point {
   y: number
 }
 
+type DataMap = ReadonlyArray<ReadonlyArray<MapElement>>
+
 const readData = (file: string, replaceAnimalWith: MapElement) => {
   const rawMap = readFileSync(resolve(__dirname, file), 'utf-8').trim().split('\n')
 
@@ -52,7 +54,7 @@ const readData = (file: string, replaceAnimalWith: MapElement) => {
   }
 }
 
-const traversePipe = (startingAnimalPosition: Point, map: ReadonlyArray<ReadonlyArray<MapElement>>) => {
+const traversePipe = (startingAnimalPosition: Point, map: DataMap) => {
   const animalPosition: Point = { ...startingAnimalPosition }
 
   const isLoopFulfilled = (): boolean => {
@@ -135,18 +137,7 @@ const traversePipe = (startingAnimalPosition: Point, map: ReadonlyArray<Readonly
   }
 }
 
-const part1 = (file: string, replaceAnimalWith: MapElement) => {
-  const { startingAnimalPosition, map } = readData(file, replaceAnimalWith)
-  const { loopLength } = traversePipe(startingAnimalPosition, map)
-
-  return loopLength / 2
-}
-
-const part2 = (file: string, replaceAnimalWith: MapElement) => {
-  const { startingAnimalPosition, map } = readData(file, replaceAnimalWith)
-  const { traversedPointsSet } = traversePipe(startingAnimalPosition, map)
-
-  const enhancedSymbols = ['┃', '━', '┗', '┛', '┓', '┏']
+const enhanceMap = (map: DataMap, traversedPointsSet: Set<string>) => {
   const enhanceSymbol = (symbol: MapElement): string => {
     switch (symbol) {
       case MapElement.VPipe:
@@ -175,30 +166,160 @@ const part2 = (file: string, replaceAnimalWith: MapElement) => {
     }
   }
 
+  // Replace all not enhanced symbols with dots
   // Removing before and after first enhanced symbol
   for (let y = 0; y < newMap.length; y++) {
-    const firstEnhancedSymbolIndex = newMap[y].findIndex(item => enhancedSymbols.includes(item))
-    const lastEnhancedSymbolIndex = newMap[y].findLastIndex(item => enhancedSymbols.includes(item))
-
-    newMap[y] = newMap[y].map((item, index) => {
-      if (index < firstEnhancedSymbolIndex || index > lastEnhancedSymbolIndex) {
-        return ' '
-      }
-
-      return item
-    })
+    newMap[y] = newMap[y]
+      .join('')
+      .replaceAll(MapElement.VPipe, '.')
+      .replaceAll(MapElement.HPipe, '.')
+      .replaceAll(MapElement.NEPipe, '.')
+      .replaceAll(MapElement.NWPipe, '.')
+      .replaceAll(MapElement.SWPipe, '.')
+      .replaceAll(MapElement.SEPipe, '.')
+      .split('')
   }
 
-  const mapString = newMap.reduce((acc, line) => `${acc}${line.join('')}\n`, '')
+  return { enhancedMap: newMap }
+}
 
+const reverseEnhanceMap = (map: Array<Array<string>>) => {
+  const reverseEnhancedMap: Array<Array<string>> = []
+
+  for (let y = 1; y < map.length; y += 3) {
+    const row: Array<string> = []
+
+    for (let x = 1; x < map[0].length; x += 3) {
+      row.push(map[y][x])
+    }
+
+    reverseEnhancedMap.push(row)
+  }
+
+  return { reverseEnhancedMap }
+}
+
+const generateFloodMap = (map: Array<Array<string>>): Array<Array<string>> => {
+  // Each square will be now 3x3 square to perform correct flooding
+  const floodMap: Array<Array<string>> = []
+
+  for (let y = 0; y < map.length; y++) {
+    const row1: Array<string> = []
+    const row2: Array<string> = []
+    const row3: Array<string> = []
+
+    for (let x = 0; x < map[0].length; x++) {
+      switch (map[y][x]) {
+        case '┃':
+          row1.push('.', '┃', '.')
+          row2.push('.', '┃', '.')
+          row3.push('.', '┃', '.')
+          break
+
+        case '━':
+          row1.push('.', '.', '.')
+          row2.push('━', '━', '━')
+          row3.push('.', '.', '.')
+          break
+
+        case '┗':
+          row1.push('.', '┃', '.')
+          row2.push('.', '┗', '━')
+          row3.push('.', '.', '.')
+          break
+
+        case '┛':
+          row1.push('.', '┃', '.')
+          row2.push('━', '┛', '.')
+          row3.push('.', '.', '.')
+          break
+
+        case '┓':
+          row1.push('.', '.', '.')
+          row2.push('━', '┓', '.')
+          row3.push('.', '┃', '.')
+          break
+
+        case '┏':
+          row1.push('.', '.', '.')
+          row2.push('.', '┏', '━')
+          row3.push('.', '┃', '.')
+          break
+
+        default:
+          row1.push('.', '.', '.')
+          row2.push('.', '.', '.')
+          row3.push('.', '.', '.')
+      }
+    }
+
+    floodMap.push(row1, row2, row3)
+  }
+
+  return floodMap
+}
+
+const floodFill = (map: Array<Array<string>>) => {
+  const queue: Array<Point> = [{ x: 0, y: 0 }]
+
+  while (queue.length > 0) {
+    const point = queue.shift()
+
+    if (map[point.y][point.x] === '.') {
+      map[point.y][point.x] = ' '
+
+      if (point.y < map.length - 1 && map[point.y + 1][point.x] !== ' ') {
+        queue.push({ x: point.x, y: point.y + 1 })
+      }
+
+      if (point.y - 1 > 0 && map[point.y - 1][point.x] !== ' ') {
+        queue.push({ x: point.x, y: point.y - 1 })
+      }
+
+      if (point.x + 1 < map[0].length && map[point.y][point.x + 1] !== ' ') {
+        queue.push({ x: point.x + 1, y: point.y })
+      }
+
+      if (point.x - 1 > 0 && map[point.y][point.x - 1] !== ' ') {
+        queue.push({ x: point.x - 1, y: point.y })
+      }
+    }
+  }
+}
+
+const part1 = (file: string, replaceAnimalWith: MapElement) => {
+  const { startingAnimalPosition, map } = readData(file, replaceAnimalWith)
+  const { loopLength } = traversePipe(startingAnimalPosition, map)
+
+  return loopLength / 2
+}
+
+const part2 = (file: string, replaceAnimalWith: MapElement) => {
+  const { startingAnimalPosition, map } = readData(file, replaceAnimalWith)
+  const { traversedPointsSet } = traversePipe(startingAnimalPosition, map)
+  const { enhancedMap } = enhanceMap(map, traversedPointsSet)
+
+  const floodMap = generateFloodMap(enhancedMap)
+  floodFill(floodMap)
+
+  const { reverseEnhancedMap } = reverseEnhanceMap(floodMap)
+
+  const mapString = reverseEnhancedMap.reduce((acc, line) => `${acc}${line.join('')}\n`, '')
   writeFileSync(resolve(__dirname, `out-${file}`), mapString, 'utf-8')
 
-  return 0
+  return reverseEnhancedMap.reduce((acc, line) => {
+    return (
+      acc +
+      line.reduce((lineAcc, item) => {
+        return lineAcc + (item === '.' ? 1 : 0)
+      }, 0)
+    )
+  }, 0)
 }
 
 // Carefully picked the replacement symbol for animal by hand :D
-// solutionExample(part1('example1.txt', MapElement.SEPipe))
-// solutionExample(part1('example2.txt', MapElement.SEPipe))
-// solutionPart1(part1('input.txt', MapElement.VPipe))
+solutionExample(part1('example1.txt', MapElement.SEPipe))
+solutionExample(part1('example2.txt', MapElement.SEPipe))
+solutionPart1(part1('input.txt', MapElement.VPipe))
 
 solutionPart2(part2('input.txt', MapElement.VPipe))
