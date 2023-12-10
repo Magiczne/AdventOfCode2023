@@ -2,6 +2,7 @@ import { resolve } from 'node:path'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { solutionExample, solutionPart1, solutionPart2 } from '../util/index.ts'
+import { writeFileSync } from 'fs'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 
@@ -26,7 +27,7 @@ interface Point {
   y: number
 }
 
-const readData = (file: string, replaceAnimalWith: string) => {
+const readData = (file: string, replaceAnimalWith: MapElement) => {
   const rawMap = readFileSync(resolve(__dirname, file), 'utf-8').trim().split('\n')
 
   const animalY = rawMap.findIndex(line => line.includes('S'))
@@ -51,8 +52,7 @@ const readData = (file: string, replaceAnimalWith: string) => {
   }
 }
 
-const part1 = (file: string, replaceAnimalWith: string) => {
-  const { startingAnimalPosition, map } = readData(file, replaceAnimalWith)
+const traversePipe = (startingAnimalPosition: Point, map: ReadonlyArray<ReadonlyArray<MapElement>>) => {
   const animalPosition: Point = { ...startingAnimalPosition }
 
   const isLoopFulfilled = (): boolean => {
@@ -62,9 +62,11 @@ const part1 = (file: string, replaceAnimalWith: string) => {
   // Calculate loop length starting on position where the animal was
   let direction: Direction = 0
   let loopLength = 0
+  let traversedPointsSet = new Set<string>()
 
   while (true) {
     const element: MapElement = map[animalPosition.y][animalPosition.x]
+    traversedPointsSet.add(`${animalPosition.y}-${animalPosition.x}`)
 
     if (loopLength > 0 && isLoopFulfilled()) {
       break
@@ -127,20 +129,76 @@ const part1 = (file: string, replaceAnimalWith: string) => {
     }
   }
 
+  return {
+    loopLength,
+    traversedPointsSet,
+  }
+}
+
+const part1 = (file: string, replaceAnimalWith: MapElement) => {
+  const { startingAnimalPosition, map } = readData(file, replaceAnimalWith)
+  const { loopLength } = traversePipe(startingAnimalPosition, map)
+
   return loopLength / 2
 }
 
-const part2 = (file: string, replaceAnimalWith: string) => {
-  const { map } = readData(file, replaceAnimalWith)
+const part2 = (file: string, replaceAnimalWith: MapElement) => {
+  const { startingAnimalPosition, map } = readData(file, replaceAnimalWith)
+  const { traversedPointsSet } = traversePipe(startingAnimalPosition, map)
 
-  return ''
+  const enhancedSymbols = ['┃', '━', '┗', '┛', '┓', '┏']
+  const enhanceSymbol = (symbol: MapElement): string => {
+    switch (symbol) {
+      case MapElement.VPipe:
+        return '┃'
+      case MapElement.HPipe:
+        return '━'
+      case MapElement.NEPipe:
+        return '┗'
+      case MapElement.NWPipe:
+        return '┛'
+      case MapElement.SWPipe:
+        return '┓'
+      case MapElement.SEPipe:
+        return '┏'
+    }
+  }
+
+  const newMap = structuredClone(map) as Array<Array<string>>
+
+  // Enhancing borders
+  for (let y = 0; y < map.length; y++) {
+    for (let x = 0; x < map.length; x++) {
+      if (traversedPointsSet.has(`${y}-${x}`)) {
+        newMap[y][x] = enhanceSymbol(map[y][x])
+      }
+    }
+  }
+
+  // Removing before and after first enhanced symbol
+  for (let y = 0; y < newMap.length; y++) {
+    const firstEnhancedSymbolIndex = newMap[y].findIndex(item => enhancedSymbols.includes(item))
+    const lastEnhancedSymbolIndex = newMap[y].findLastIndex(item => enhancedSymbols.includes(item))
+
+    newMap[y] = newMap[y].map((item, index) => {
+      if (index < firstEnhancedSymbolIndex || index > lastEnhancedSymbolIndex) {
+        return ' '
+      }
+
+      return item
+    })
+  }
+
+  const mapString = newMap.reduce((acc, line) => `${acc}${line.join('')}\n`, '')
+
+  writeFileSync(resolve(__dirname, `out-${file}`), mapString, 'utf-8')
+
+  return 0
 }
 
 // Carefully picked the replacement symbol for animal by hand :D
-solutionExample(part1('example1.txt', '┌'))
-solutionExample(part1('example2.txt', '┌'))
-solutionPart1(part1('input.txt', '|'))
+// solutionExample(part1('example1.txt', MapElement.SEPipe))
+// solutionExample(part1('example2.txt', MapElement.SEPipe))
+// solutionPart1(part1('input.txt', MapElement.VPipe))
 
-solutionExample(part2('example1.txt', '┌'))
-solutionExample(part2('example2.txt', '┌'))
-solutionPart1(part2('input.txt', '|'))
+solutionPart2(part2('input.txt', MapElement.VPipe))
